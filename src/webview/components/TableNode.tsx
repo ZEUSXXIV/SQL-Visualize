@@ -39,10 +39,17 @@ export const TableNode = ({ data, id }: any) => {
         setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
     };
 
+    const previewData = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        // @ts-ignore
+        if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'PREVIEW_TABLE', table: data.tableName });
+    };
+
     return (
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', border: '1px solid var(--vscode-panel-border)', borderRadius: '4px', minWidth: '320px', fontSize: '12px' }}>
             <div style={{ background: 'var(--vscode-editorGroupHeader-tabsBackground)', padding: '8px', borderBottom: '1px solid var(--vscode-panel-border)', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button className="nodrag" onClick={previewData} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer', padding: '0', fontSize: '14px', outline: 'none' }} title="Preview Live Data (TOP 25)">👁️</button>
                     <span>{data.tableName}</span>
                     <input 
                         title="Table Alias"

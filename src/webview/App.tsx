@@ -21,6 +21,7 @@ export const App = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
     const [dbSchema, setDbSchema] = useState<any[]>([]);
+    const [previewData, setPreviewData] = useState<{ table: string, records: any[] } | null>(null);
 
     useEffect(() => {
         const messageHandler = (event: MessageEvent) => {
@@ -39,6 +40,9 @@ export const App = () => {
                     break;
                 case 'TABLE_DATA':
                     setDbSchema(message.payload);
+                    break;
+                case 'PREVIEW_DATA':
+                    setPreviewData({ table: message.table, records: message.data });
                     break;
             }
         };
@@ -126,24 +130,61 @@ export const App = () => {
             </div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
                 {isConnected && <Sidebar dbSchema={dbSchema} />}
-                <div style={{ flex: 1, position: 'relative' }} ref={reactFlowWrapper}>
-                    <ReactFlowProvider>
-                        <ReactFlow 
-                            nodes={nodes} 
-                            edges={edges} 
-                            onNodesChange={onNodesChange}
-                            onEdgesChange={onEdgesChange}
-                            onConnect={onConnect}
-                            onInit={setReactFlowInstance}
-                            onDrop={onDrop}
-                            onDragOver={onDragOver}
-                            nodeTypes={nodeTypes}
-                            edgeTypes={edgeTypes}
-                        >
-                            <Background />
-                            <Controls />
-                        </ReactFlow>
-                    </ReactFlowProvider>
+                <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }} ref={reactFlowWrapper}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                        <ReactFlowProvider>
+                            <ReactFlow 
+                                nodes={nodes} 
+                                edges={edges} 
+                                onNodesChange={onNodesChange}
+                                onEdgesChange={onEdgesChange}
+                                onConnect={onConnect}
+                                onInit={setReactFlowInstance}
+                                onDrop={onDrop}
+                                onDragOver={onDragOver}
+                                nodeTypes={nodeTypes}
+                                edgeTypes={edgeTypes}
+                            >
+                                <Background />
+                                <Controls />
+                            </ReactFlow>
+                        </ReactFlowProvider>
+                    </div>
+                    {previewData && (
+                        <div style={{ height: '300px', borderTop: '1px solid var(--vscode-panel-border)', background: 'var(--vscode-editor-background)', display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: '6px 12px', background: 'var(--vscode-editorGroupHeader-tabsBackground)', borderBottom: '1px solid var(--vscode-panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', color: 'var(--vscode-editor-foreground)', letterSpacing: '0.5px' }}>Data Preview: {previewData.table} (TOP 25)</span>
+                                <button onClick={() => setPreviewData(null)} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer', outline: 'none' }} title="Close Preview">✖</button>
+                            </div>
+                            <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left', fontFamily: 'var(--vscode-editor-font-family)' }}>
+                                    <thead style={{ background: 'var(--vscode-editor-inactiveSelectionBackground)', position: 'sticky', top: 0, zIndex: 10 }}>
+                                        <tr>
+                                            {previewData.records.length > 0 && Object.keys(previewData.records[0]).map(k => (
+                                                <th key={k} style={{ padding: '8px 12px', borderBottom: '1px solid var(--vscode-panel-border)', color: 'var(--vscode-editor-foreground)', whiteSpace: 'nowrap', fontWeight: 'bold' }}>{k}</th>
+                                            ))}
+                                            {previewData.records.length === 0 && (
+                                                <th style={{ padding: '8px 12px' }}>Status</th>
+                                            )}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {previewData.records.length === 0 ? (
+                                            <tr><td colSpan={100} style={{ padding: '16px', textAlign: 'center', color: 'var(--vscode-descriptionForeground)' }}>No records found in {previewData.table}.</td></tr>
+                                        ) : (
+                                            previewData.records.map((r, i) => (
+                                                <tr key={i} style={{ borderBottom: '1px solid var(--vscode-panel-border)', background: i % 2 === 0 ? 'transparent' : 'var(--vscode-list-inactiveSelectionBackground)' }}>
+                                                    {Object.values(r).map((v: any, j) => (
+                                                        <td key={j} style={{ padding: '6px 12px', color: 'var(--vscode-editor-foreground)', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v === null ? <span style={{ color: 'var(--vscode-descriptionForeground)', fontStyle: 'italic' }}>NULL</span> : String(v)}</td>
+                                                    ))}
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

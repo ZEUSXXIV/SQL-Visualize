@@ -88,6 +88,19 @@ export function activate(context: vscode.ExtensionContext) {
                             vscode.window.showErrorMessage(`Schema Fetch Error: ${err.message}`);
                         }
                         return;
+                    case 'PREVIEW_TABLE':
+                        if (!dbPool) {
+                            vscode.window.showErrorMessage('SQL Visualize: Database not connected. Cannot preview data.');
+                            return;
+                        }
+                        vscode.window.showInformationMessage(`Visualizing TOP 25 records from [${message.table}]...`);
+                        try {
+                            const result = await dbPool.request().query(`SELECT TOP 25 * FROM ${message.table}`);
+                            panel.webview.postMessage({ command: 'PREVIEW_DATA', table: message.table, data: result.recordset });
+                        } catch(err: any) {
+                            vscode.window.showErrorMessage(`Preview Error: ${err.message}`);
+                        }
+                        return;
                     case 'GENERATE_SQL':
                         const { nodes, edges } = message.payload;
                         let finalOutput = '';
