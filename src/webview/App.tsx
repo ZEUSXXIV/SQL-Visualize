@@ -1,31 +1,44 @@
-import React, { useCallback, useEffect } from 'react';
-import ReactFlow, { addEdge, Background, Controls, Node, Edge, Connection, useNodesState, useEdgesState } from 'reactflow';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
+import ReactFlow, { addEdge, Background, Controls, Node, Edge, Connection, useNodesState, useEdgesState, ReactFlowProvider } from 'reactflow';
 import { TableNode } from './components/TableNode';
 import { JoinEdge } from './components/JoinEdge';
+import { Sidebar } from './components/Sidebar';
+import { ConnectionModal } from './components/ConnectionModal';
 import 'reactflow/dist/style.css';
 
 const nodeTypes = { tableNode: TableNode };
 const edgeTypes = { joinEdge: JoinEdge };
 
+let idGen = 0;
+const getId = () => `dndnode_${idGen++}`;
+
 export const App = () => {
+    const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
+    const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+
+    const [isConnected, setIsConnected] = useState(false);
+    const [isConnecting, setIsConnecting] = useState(false);
+    const [dbSchema, setDbSchema] = useState<any[]>([]);
 
     useEffect(() => {
-        // Central hub for receiving messages from Extension Host
         const messageHandler = (event: MessageEvent) => {
             const message = event.data;
             switch (message.command) {
+                case 'CONNECTION_SUCCESS':
+                    setIsConnected(true);
+                    setIsConnecting(false);
+                    // Automatically rip the database tables into the Sidebar
+                    // @ts-ignore
+                    if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'REQUEST_TABLES' });
+                    break;
+                case 'CONNECTION_ERROR':
+                    setIsConnected(false);
+                    setIsConnecting(false);
+                    break;
                 case 'TABLE_DATA':
-                    const tables = message.payload;
-                    // Map introsected data to renderable Table Nodes
-                    const newNodes = tables.map((t: any, index: number) => ({
-                        id: `table-${index}`,
-                        type: 'tableNode',
-                        position: { x: 100 + (index * 400), y: 100 },
-                        data: { tableName: t.tableName, columns: t.columns }
-                    }));
-                    setNodes(newNodes);
+                    setDbSchema(message.payload);
                     break;
             }
         };
@@ -33,29 +46,20 @@ export const App = () => {
         return () => window.removeEventListener('message', messageHandler);
     }, []);
 
-    const requestTables = () => {
-        // Trigger MS-MSSQL Introspection pipeline
+    const connectDb = (connString: string) => {
+        setIsConnecting(true);
         // @ts-ignore
-        if (window.vscodeApi) {
-            // @ts-ignore
-            window.vscodeApi.postMessage({ command: 'REQUEST_TABLES' });
-        } else {
-            console.warn('VS Code API not found, running outside of VS Code!');
-        }
+        if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'CONNECT_DB', payload: connString });
     };
 
     const generateSQL = () => {
-        // Send AST mappings to VS code
         // @ts-ignore
-        if (window.vscodeApi) {
-            // @ts-ignore
-            window.vscodeApi.postMessage({ command: 'GENERATE_SQL', payload: { nodes, edges } });
-        }
+        if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'GENERATE_SQL', payload: { nodes, edges } });
     };
 
     const onConnect = useCallback((connection: Connection) => {
-        const sourceNode = nodes.find(n => n.id === connection.source);
-        const targetNode = nodes.find(n => n.id === connection.target);
+        const sourceNode = nodes.find((n: any) => n.id === connection.source);
+        const targetNode = nodes.find((n: any) => n.id === connection.target);
         
         let sourceType = 'unknown';
         let targetType = 'unknown';
@@ -74,27 +78,73 @@ export const App = () => {
 
         const newEdge = { ...connection, type: 'joinEdge', data: { joinType: 'INNER' } };
         setEdges((eds) => addEdge(newEdge, eds));
-    }, [nodes]);
+    }, [nodes, setEdges]);
+    
+    const onDragOver = useCallback((event: any) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    }, []);
+
+    const onDrop = useCallback((event: any) => {
+        event.preventDefault();
+
+        const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+        const typeDefinition = event.dataTransfer.getData('application/reactflow');
+        
+        if (!typeDefinition || !reactFlowBounds || !reactFlowInstance) {
+            return;
+        }
+
+        const tableDef = JSON.parse(typeDefinition);
+        const position = reactFlowInstance.project({
+            x: event.clientX - reactFlowBounds.left,
+            y: event.clientY - reactFlowBounds.top,
+        });
+
+        const newNode = {
+            id: getId(),
+            type: 'tableNode',
+            position,
+            data: { tableName: tableDef.tableName, columns: tableDef.columns },
+        };
+
+        setNodes((nds) => nds.concat(newNode));
+    }, [reactFlowInstance, setNodes]);
 
     return (
         <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '12px', background: 'var(--vscode-sideBar-background)', borderBottom: '1px solid var(--vscode-panel-border)', display: 'flex', gap: '8px' }}>
-                <button onClick={requestTables} style={{ padding: '6px 16px', background: 'var(--vscode-button-secondaryBackground)', color: 'var(--vscode-button-secondaryForeground)', border: '1px solid var(--vscode-button-border)', cursor: 'pointer', borderRadius: '2px' }}>Introspect Database</button>
-                <button onClick={generateSQL} style={{ padding: '6px 16px', background: 'var(--vscode-button-background)', color: 'var(--vscode-button-foreground)', border: '1px solid var(--vscode-button-border)', cursor: 'pointer', borderRadius: '2px' }}>Generate SQL</button>
+            {!isConnected && <ConnectionModal onConnect={connectDb} isConnecting={isConnecting} />}
+            <div style={{ padding: '8px 16px', background: 'var(--vscode-editorGroupHeader-tabsBackground)', borderBottom: '1px solid var(--vscode-panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: isConnected ? '#4CAF50' : '#F44336' }}></div>
+                    <span style={{ fontWeight: 'bold', fontSize: '13px' }}>SQL Visualize Engine</span>
+                </div>
+                <div>
+                   <button onClick={() => { setIsConnected(false); setNodes([]); setEdges([]); setDbSchema([]); }} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-secondaryForeground)', border: '1px solid var(--vscode-button-secondaryBackground)', cursor: 'pointer', borderRadius: '2px', marginRight: '12px' }}>Disconnect</button>
+                   <button onClick={generateSQL} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'var(--vscode-button-background)', color: 'var(--vscode-button-foreground)', border: 'none', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', opacity: nodes.length === 0 ? 0.5 : 1 }}>Export SQL Batch</button>
+                </div>
             </div>
-            <div style={{ flex: 1 }}>
-                <ReactFlow 
-                    nodes={nodes} 
-                    edges={edges} 
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    nodeTypes={nodeTypes}
-                    edgeTypes={edgeTypes}
-                    onConnect={onConnect}
-                >
-                    <Background />
-                    <Controls />
-                </ReactFlow>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
+                {isConnected && <Sidebar dbSchema={dbSchema} />}
+                <div style={{ flex: 1, position: 'relative' }} ref={reactFlowWrapper}>
+                    <ReactFlowProvider>
+                        <ReactFlow 
+                            nodes={nodes} 
+                            edges={edges} 
+                            onNodesChange={onNodesChange}
+                            onEdgesChange={onEdgesChange}
+                            onConnect={onConnect}
+                            onInit={setReactFlowInstance}
+                            onDrop={onDrop}
+                            onDragOver={onDragOver}
+                            nodeTypes={nodeTypes}
+                            edgeTypes={edgeTypes}
+                        >
+                            <Background />
+                            <Controls />
+                        </ReactFlow>
+                    </ReactFlowProvider>
+                </div>
             </div>
         </div>
     );

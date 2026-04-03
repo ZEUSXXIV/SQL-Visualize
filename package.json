@@ -35,6 +35,7 @@
   "devDependencies": {
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.1",
+    "@types/mssql": "^9.1.11",
     "@types/node": "20.2.5",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
@@ -53,6 +54,7 @@
   },
   "dependencies": {
     "@vscode/webview-ui-toolkit": "^1.2.2",
+    "mssql": "^12.2.1",
     "node-sql-parser": "^4.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

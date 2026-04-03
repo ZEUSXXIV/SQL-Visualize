@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Parser } from 'node-sql-parser';
+import * as sql from 'mssql';
 
 export function activate(context: vscode.ExtensionContext) {
     const mssqlExtension = vscode.extensions.getExtension('ms-mssql.mssql');
@@ -8,6 +9,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     console.log('SQL Visualize is now active!');
+    
+    let dbPool: sql.ConnectionPool | null = null;
 
     let disposable = vscode.commands.registerCommand('mssql-visual-builder.open', () => {
         const panel = vscode.window.createWebviewPanel(
@@ -28,26 +31,62 @@ export function activate(context: vscode.ExtensionContext) {
         panel.webview.onDidReceiveMessage(
             async message => {
                 switch (message.command) {
+                    case 'CONNECT_DB':
+                        const connectionString = message.payload;
+                        try {
+                            if (dbPool) {
+                                await dbPool.close();
+                            }
+                            dbPool = new sql.ConnectionPool(connectionString);
+                            await dbPool.connect();
+                            vscode.window.showInformationMessage('Successfully connected to Database via SQL Visualize!');
+                            panel.webview.postMessage({ command: 'CONNECTION_SUCCESS' });
+                        } catch (err: any) {
+                            vscode.window.showErrorMessage(`Failed to connect to Database: ${err.message}`);
+                            panel.webview.postMessage({ command: 'CONNECTION_ERROR', payload: err.message });
+                        }
+                        return;
+
                     case 'REQUEST_TABLES':
-                        // In production, we interact with mssqlExtension.exports or execute standard queries here.
-                        // Emulated Introspection Pipeline for Data
-                        panel.webview.postMessage({
-                            command: 'TABLE_DATA',
-                            payload: [
-                                {
-                                    tableName: 'Users',
-                                    columns: [{ name: 'id', type: 'INT' }, { name: 'username', type: 'VARCHAR' }, { name: 'created_at', type: 'DATETIME' }]
-                                },
-                                {
-                                    tableName: 'Orders',
-                                    columns: [{ name: 'orderId', type: 'INT' }, { name: 'userId', type: 'INT' }, { name: 'amount', type: 'DECIMAL' }]
-                                },
-                                {
-                                    tableName: 'Products',
-                                    columns: [{ name: 'productId', type: 'INT' }, { name: 'productName', type: 'VARCHAR' }, { name: 'price', type: 'DECIMAL' }]
+                        if (!dbPool) {
+                            vscode.window.showErrorMessage('No active database connection mapped!');
+                            return;
+                        }
+                        try {
+                            const result = await dbPool.request().query(`
+                                SELECT 
+                                    t.name AS tableName,
+                                    c.name AS columnName,
+                                    ty.name AS dataType,
+                                    s.name AS schemaName
+                                FROM 
+                                    sys.tables t
+                                INNER JOIN 
+                                    sys.columns c ON t.object_id = c.object_id
+                                INNER JOIN 
+                                    sys.types ty ON c.user_type_id = ty.user_type_id
+                                INNER JOIN 
+                                    sys.schemas s ON t.schema_id = s.schema_id
+                                ORDER BY 
+                                    schemaName, 
+                                    tableName, 
+                                    c.column_id;
+                            `);
+                            
+                            const tablesMap: Record<string, any> = {};
+                            result.recordset.forEach((row: any) => {
+                                const key = `[${row.schemaName}].[${row.tableName}]`;
+                                if (!tablesMap[key]) {
+                                    tablesMap[key] = { tableName: key, columns: [] };
                                 }
-                            ]
-                        });
+                                tablesMap[key].columns.push({ name: `${row.columnName}`, type: row.dataType });
+                            });
+                            
+                            const tablesArray = Object.values(tablesMap);
+                            panel.webview.postMessage({ command: 'TABLE_DATA', payload: tablesArray });
+                        } catch(err: any) {
+                            vscode.window.showErrorMessage(`Schema Fetch Error: ${err.message}`);
+                        }
                         return;
                     case 'GENERATE_SQL':
                         const { nodes, edges } = message.payload;

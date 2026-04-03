@@ -31,13 +31,14 @@ SQL Visualize provides a high-performance, interactive canvas for database schem
 
 ### Installation
 1. Search for **SQL Visualize** in the VS Code Extension Marketplace.
-2. Ensure the **Microsoft MSSQL** extension is installed (optional for MVP simulation).
 
 ### Usage
 1. Open the Command Palette (**Ctrl+Shift+P**).
 2. Type `SQL Visualize: Open Canvas`.
-3. Click **Introspect Database** to load your schema.
-4. Drag connections, set functions/aliases, and hit **Generate SQL**!
+3. **Important**: Follow the [SQL Server Setup Guide](file:///c:/Users/Naveen/Documents/projects/mssql-visual-builder/docs/sql-server-setup.md) to enable TCP/IP and SQL Authentication on your local server.
+4. Provide your connection string (e.g., `Server=localhost;Database=master;User Id=sa;Password=...;Encrypt=True;TrustServerCertificate=True;`).
+5. Click **Connect Engine** to load your schema into the Object Explorer Sidebar.
+6. Drag tables onto the canvas and start building!
 
 ---
 
