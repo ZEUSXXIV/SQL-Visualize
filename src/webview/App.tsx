@@ -22,6 +22,8 @@ export const App = () => {
     const [isConnecting, setIsConnecting] = useState(false);
     const [dbSchema, setDbSchema] = useState<any[]>([]);
     const [previewData, setPreviewData] = useState<{ table: string, records: any[] } | null>(null);
+    const [queryResults, setQueryResults] = useState<{ data: any[], rowsAffected: number } | null>(null);
+    const [queryError, setQueryError] = useState<string | null>(null);
 
     useEffect(() => {
         const messageHandler = (event: MessageEvent) => {
@@ -43,6 +45,18 @@ export const App = () => {
                     break;
                 case 'PREVIEW_DATA':
                     setPreviewData({ table: message.table, records: message.data });
+                    setQueryResults(null);
+                    setQueryError(null);
+                    break;
+                case 'QUERY_RESULTS':
+                    setQueryResults({ data: message.data, rowsAffected: message.rowsAffected });
+                    setPreviewData(null);
+                    setQueryError(null);
+                    break;
+                case 'QUERY_ERROR':
+                    setQueryError(message.message);
+                    setQueryResults(null);
+                    setPreviewData(null);
                     break;
             }
         };
@@ -59,6 +73,13 @@ export const App = () => {
     const generateSQL = () => {
         // @ts-ignore
         if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'GENERATE_SQL', payload: { nodes, edges } });
+    };
+
+    const runVisualQuery = () => {
+        setQueryError(null);
+        setQueryResults(null);
+        // @ts-ignore
+        if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'EXECUTE_VISUAL_QUERY', payload: { nodes, edges } });
     };
 
     const onConnect = useCallback((connection: Connection) => {
@@ -124,8 +145,9 @@ export const App = () => {
                     <span style={{ fontWeight: 'bold', fontSize: '13px' }}>SQL Visualize Engine</span>
                 </div>
                 <div>
-                   <button onClick={() => { setIsConnected(false); setNodes([]); setEdges([]); setDbSchema([]); }} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-secondaryForeground)', border: '1px solid var(--vscode-button-secondaryBackground)', cursor: 'pointer', borderRadius: '2px', marginRight: '12px' }}>Disconnect</button>
-                   <button onClick={generateSQL} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'var(--vscode-button-background)', color: 'var(--vscode-button-foreground)', border: 'none', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', opacity: nodes.length === 0 ? 0.5 : 1 }}>Export SQL Batch</button>
+                   <button onClick={() => { setIsConnected(false); setNodes([]); setEdges([]); setDbSchema([]); setPreviewData(null); setQueryResults(null); }} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-secondaryForeground)', border: '1px solid var(--vscode-button-secondaryBackground)', cursor: 'pointer', borderRadius: '2px', marginRight: '12px' }}>Disconnect</button>
+                   <button onClick={runVisualQuery} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'var(--vscode-button-background)', color: 'var(--vscode-button-foreground)', border: 'none', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', marginRight: '12px', opacity: nodes.length === 0 ? 0.5 : 1 }}>Run Visual Query</button>
+                   <button onClick={generateSQL} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-foreground)', border: '1px solid var(--vscode-button-background)', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', opacity: nodes.length === 0 ? 0.5 : 1 }}>Export SQL Batch</button>
                 </div>
             </div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
@@ -150,38 +172,46 @@ export const App = () => {
                             </ReactFlow>
                         </ReactFlowProvider>
                     </div>
-                    {previewData && (
+                    {(previewData || queryResults || queryError) && (
                         <div style={{ height: '300px', borderTop: '1px solid var(--vscode-panel-border)', background: 'var(--vscode-editor-background)', display: 'flex', flexDirection: 'column' }}>
                             <div style={{ padding: '6px 12px', background: 'var(--vscode-editorGroupHeader-tabsBackground)', borderBottom: '1px solid var(--vscode-panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', color: 'var(--vscode-editor-foreground)', letterSpacing: '0.5px' }}>Data Preview: {previewData.table} (TOP 25)</span>
-                                <button onClick={() => setPreviewData(null)} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer', outline: 'none' }} title="Close Preview">✖</button>
+                                <span style={{ fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', color: 'var(--vscode-editor-foreground)', letterSpacing: '0.5px' }}>
+                                    {previewData ? `Data Preview: ${previewData.table} (TOP 25)` : (queryResults ? `Query Results (${queryResults.rowsAffected} rows affected)` : 'Query Execution Error')}
+                                </span>
+                                <button onClick={() => { setPreviewData(null); setQueryResults(null); setQueryError(null); }} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer', outline: 'none' }} title="Close">✖</button>
                             </div>
                             <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left', fontFamily: 'var(--vscode-editor-font-family)' }}>
-                                    <thead style={{ background: 'var(--vscode-editor-inactiveSelectionBackground)', position: 'sticky', top: 0, zIndex: 10 }}>
-                                        <tr>
-                                            {previewData.records.length > 0 && Object.keys(previewData.records[0]).map(k => (
-                                                <th key={k} style={{ padding: '8px 12px', borderBottom: '1px solid var(--vscode-panel-border)', color: 'var(--vscode-editor-foreground)', whiteSpace: 'nowrap', fontWeight: 'bold' }}>{k}</th>
-                                            ))}
-                                            {previewData.records.length === 0 && (
-                                                <th style={{ padding: '8px 12px' }}>Status</th>
+                                {queryError ? (
+                                    <div style={{ padding: '20px', color: '#f48771', whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '12px' }}>
+                                        {queryError}
+                                    </div>
+                                ) : (
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left', fontFamily: 'var(--vscode-editor-font-family)' }}>
+                                        <thead style={{ background: 'var(--vscode-editor-inactiveSelectionBackground)', position: 'sticky', top: 0, zIndex: 10 }}>
+                                            <tr>
+                                                {((previewData && previewData.records && previewData.records.length > 0) || (queryResults && queryResults.data && queryResults.data.length > 0)) && Object.keys(previewData?.records?.[0] || queryResults?.data?.[0]).map(k => (
+                                                    <th key={k} style={{ padding: '8px 12px', borderBottom: '1px solid var(--vscode-panel-border)', color: 'var(--vscode-editor-foreground)', whiteSpace: 'nowrap', fontWeight: 'bold' }}>{k}</th>
+                                                ))}
+                                                {((previewData && previewData.records.length === 0) || (queryResults && queryResults.data.length === 0)) && (
+                                                    <th style={{ padding: '8px 12px' }}>Status</th>
+                                                )}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {((previewData && previewData.records && previewData.records.length === 0) || (queryResults && queryResults.data && queryResults.data.length === 0)) ? (
+                                                <tr><td colSpan={100} style={{ padding: '16px', textAlign: 'center', color: 'var(--vscode-descriptionForeground)' }}>No records returned.</td></tr>
+                                            ) : (
+                                                (previewData?.records || queryResults?.data || []).map((r, i) => (
+                                                    <tr key={i} style={{ borderBottom: '1px solid var(--vscode-panel-border)', background: i % 2 === 0 ? 'transparent' : 'var(--vscode-list-inactiveSelectionBackground)' }}>
+                                                        {Object.values(r).map((v: any, j) => (
+                                                            <td key={j} style={{ padding: '6px 12px', color: 'var(--vscode-editor-foreground)', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v === null ? <span style={{ color: 'var(--vscode-descriptionForeground)', fontStyle: 'italic' }}>NULL</span> : String(v)}</td>
+                                                        ))}
+                                                    </tr>
+                                                ))
                                             )}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {previewData.records.length === 0 ? (
-                                            <tr><td colSpan={100} style={{ padding: '16px', textAlign: 'center', color: 'var(--vscode-descriptionForeground)' }}>No records found in {previewData.table}.</td></tr>
-                                        ) : (
-                                            previewData.records.map((r, i) => (
-                                                <tr key={i} style={{ borderBottom: '1px solid var(--vscode-panel-border)', background: i % 2 === 0 ? 'transparent' : 'var(--vscode-list-inactiveSelectionBackground)' }}>
-                                                    {Object.values(r).map((v: any, j) => (
-                                                        <td key={j} style={{ padding: '6px 12px', color: 'var(--vscode-editor-foreground)', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v === null ? <span style={{ color: 'var(--vscode-descriptionForeground)', fontStyle: 'italic' }}>NULL</span> : String(v)}</td>
-                                                    ))}
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
+                                        </tbody>
+                                    </table>
+                                )}
                             </div>
                         </div>
                     )}
