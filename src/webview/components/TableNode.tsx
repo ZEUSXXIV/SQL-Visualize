@@ -51,7 +51,8 @@ export const TableNode = ({ data, id }: any) => {
             <div style={{ background: 'var(--vscode-editorGroupHeader-tabsBackground)', padding: '8px', borderBottom: '1px solid var(--vscode-panel-border)', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button className="nodrag" onClick={previewData} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer', padding: '0', fontSize: '14px', outline: 'none' }} title="Preview Live Data (TOP 25)">👁️</button>
-                    <span>{data.tableName}</span>
+                    {data.isStale && <span title="Table Missing in Connected Database" style={{ cursor: 'help' }}>⚠️</span>}
+                    <span style={{ color: data.isStale ? '#f48771' : 'inherit', textDecoration: data.isStale ? 'line-through' : 'none' }}>{data.tableName}</span>
                     <input 
                         title="Table Alias"
                         type="text" 
@@ -81,8 +82,9 @@ export const TableNode = ({ data, id }: any) => {
                                 style={{ margin: 0 }}
                             />
                             
-                            <span style={{ flex: 1, textDecoration: col.isSelected === false ? 'line-through' : 'none', opacity: col.isSelected === false ? 0.4 : 1 }}>
-                                {col.name} <span style={{ color: 'var(--vscode-descriptionForeground)', fontSize: '0.9em' }}>{col.type}</span>
+                            <span style={{ flex: 1, textDecoration: col.isSelected === false || col.isStale ? 'line-through' : 'none', opacity: col.isSelected === false || col.isStale ? 0.4 : 1 }}>
+                                {col.isStale && <span title="Column missing from connected database" style={{ cursor: 'help', marginRight: '4px' }}>⚠️</span>}
+                                <span style={{ color: col.isStale ? '#f48771' : 'inherit' }}>{col.name}</span> <span style={{ color: 'var(--vscode-descriptionForeground)', fontSize: '0.9em' }}>{col.type}</span>
                             </span>
                             
                             <button className="nodrag" onClick={() => setExpandedFilter(expandedFilter === col.name ? null : col.name)} title={col.filter?.operator ? 'Edit Filter' : 'Add Filter'} style={{ background: col.filter?.operator ? 'var(--vscode-button-background)' : 'transparent', color: col.filter?.operator ? 'var(--vscode-button-foreground)' : 'var(--vscode-icon-foreground)', border: col.filter?.operator ? 'none' : '1px solid transparent', cursor: 'pointer', padding: '1px 4px', borderRadius: '2px', fontSize: '10px' }}>

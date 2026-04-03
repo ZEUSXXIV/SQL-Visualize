@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export const Sidebar = ({ dbSchema }: { dbSchema: any[] }) => {
+export const Sidebar = ({ dbSchema, onRefresh }: { dbSchema: any[], onRefresh: () => void }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const onDragStart = (event: React.DragEvent, tableDef: any) => {
         event.dataTransfer.setData('application/reactflow', JSON.stringify(tableDef));
@@ -12,13 +12,24 @@ export const Sidebar = ({ dbSchema }: { dbSchema: any[] }) => {
             <div style={{ padding: '12px', borderBottom: '1px solid var(--vscode-panel-border)', background: 'var(--vscode-sideBarSectionHeader-background)' }}>
                 <h3 style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', color: 'var(--vscode-sideBarTitle-foreground)', letterSpacing: '1px' }}>Object Explorer</h3>
                 <p style={{ margin: '4px 0 8px 0', fontSize: '10px', color: 'var(--vscode-descriptionForeground)' }}>Drag tables to Canvas</p>
-                <input 
-                    type="text" 
-                    placeholder="Search tables..." 
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px', fontSize: '11px', background: 'var(--vscode-input-background)', color: 'var(--vscode-input-foreground)', border: '1px solid var(--vscode-input-border)', outline: 'none', borderRadius: '3px' }}
-                />
+                <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                    <input 
+                        type="text" 
+                        placeholder="Search tables..." 
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        style={{ flex: 1, padding: '6px', fontSize: '11px', background: 'var(--vscode-input-background)', color: 'var(--vscode-input-foreground)', border: '1px solid var(--vscode-input-border)', outline: 'none', borderRadius: '3px' }}
+                    />
+                    <button 
+                        onClick={onRefresh}
+                        title="Refresh Database Schema"
+                        style={{ background: 'transparent', border: '1px solid var(--vscode-input-border)', color: 'var(--vscode-input-foreground)', cursor: 'pointer', padding: '0 8px', borderRadius: '3px', fontSize: '14px' }}
+                        onMouseOver={(e) => e.currentTarget.style.background = 'var(--vscode-list-hoverBackground)'}
+                        onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                        🔄
+                    </button>
+                </div>
             </div>
             
             <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>

@@ -9,6 +9,14 @@ import 'reactflow/dist/style.css';
 const nodeTypes = { tableNode: TableNode };
 const edgeTypes = { joinEdge: JoinEdge };
 
+declare global {
+    interface Window {
+        vscodeApi: {
+            postMessage: (message: any) => void;
+        };
+    }
+}
+
 let idGen = 0;
 const getId = () => `dndnode_${idGen++}`;
 
@@ -24,6 +32,7 @@ export const App = () => {
     const [previewData, setPreviewData] = useState<{ table: string, records: any[] } | null>(null);
     const [queryResults, setQueryResults] = useState<{ data: any[], rowsAffected: number } | null>(null);
     const [queryError, setQueryError] = useState<string | null>(null);
+    const [validationTrigger, setValidationTrigger] = useState(0);
 
     useEffect(() => {
         const messageHandler = (event: MessageEvent) => {
@@ -58,11 +67,68 @@ export const App = () => {
                     setQueryResults(null);
                     setPreviewData(null);
                     break;
+                case 'WORKSPACE_LOADED':
+                    const loadedNodes = message.payload.nodes || [];
+                    const loadedEdges = message.payload.edges || [];
+                    setNodes(loadedNodes);
+                    setEdges(loadedEdges);
+                    setValidationTrigger(v => v + 1);
+                    break;
             }
         };
         window.addEventListener('message', messageHandler);
         return () => window.removeEventListener('message', messageHandler);
-    }, []);
+    }, [setNodes, setEdges]);
+
+    useEffect(() => {
+        if (!isConnected && dbSchema.length === 0) return;
+
+        setNodes(prevNodes => {
+            let shouldUpdate = false;
+            const validatedNodes = prevNodes.map((node: any) => {
+                const dbTable = dbSchema.find(t => t.tableName === node.data.tableName);
+                const isStale = !dbTable;
+                
+                let finalData = { ...node.data, isStale };
+                let nodeChanged = node.data.isStale !== isStale;
+
+                if (dbTable && node.data.columns) {
+                    const existingDBColNames = new Set(dbTable.columns.map((c: any) => c.name));
+                    
+                    let columnsChanged = false;
+                    const validatedColumns = node.data.columns.map((col: any) => {
+                        const colStale = !existingDBColNames.has(col.name);
+                        if (col.isStale !== colStale) columnsChanged = true;
+                        return { ...col, isStale: colStale };
+                    });
+
+                    const existingLoadedColNames = new Set(node.data.columns.map((c: any) => c.name));
+                    const newColumns = dbTable.columns.filter((dbCol: any) => !existingLoadedColNames.has(dbCol.name));
+                    
+                    if (newColumns.length > 0) {
+                        const appendedColumns = newColumns.map((dbCol: any) => ({
+                            name: dbCol.name,
+                            type: dbCol.type,
+                            isSelected: false,
+                            isStale: false
+                        }));
+                        finalData.columns = [...validatedColumns, ...appendedColumns];
+                        nodeChanged = true;
+                    } else {
+                        finalData.columns = validatedColumns;
+                        if (columnsChanged) nodeChanged = true;
+                    }
+                }
+
+                if (nodeChanged) {
+                    shouldUpdate = true;
+                    return { ...node, data: finalData };
+                }
+                return node;
+            });
+            return shouldUpdate ? validatedNodes : prevNodes;
+        });
+    }, [dbSchema, isConnected, setNodes, validationTrigger]);
 
     const connectDb = (connString: string) => {
         setIsConnecting(true);
@@ -80,6 +146,24 @@ export const App = () => {
         setQueryResults(null);
         // @ts-ignore
         if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'EXECUTE_VISUAL_QUERY', payload: { nodes, edges } });
+    };
+
+    const refreshSchema = () => {
+        // @ts-ignore
+        if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'REQUEST_TABLES' });
+    };
+
+    const loadWorkspace = () => {
+        // @ts-ignore
+        if (window.vscodeApi) {
+            window.vscodeApi.postMessage({ command: 'REQUEST_TABLES' });
+            window.vscodeApi.postMessage({ command: 'LOAD_WORKSPACE' });
+        }
+    };
+
+    const saveWorkspace = () => {
+        // @ts-ignore
+        if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'SAVE_WORKSPACE', payload: { nodes, edges } });
     };
 
     const onConnect = useCallback((connection: Connection) => {
@@ -145,13 +229,16 @@ export const App = () => {
                     <span style={{ fontWeight: 'bold', fontSize: '13px' }}>SQL Visualize Engine</span>
                 </div>
                 <div>
-                   <button onClick={() => { setIsConnected(false); setNodes([]); setEdges([]); setDbSchema([]); setPreviewData(null); setQueryResults(null); }} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-secondaryForeground)', border: '1px solid var(--vscode-button-secondaryBackground)', cursor: 'pointer', borderRadius: '2px', marginRight: '12px' }}>Disconnect</button>
+                   {!isConnected && <span style={{ color: 'var(--vscode-descriptionForeground)', fontSize: '11px', fontStyle: 'italic', marginRight: '16px' }}>Workspace loaded. Connect to validate schema & run queries.</span>}
+                   <button onClick={() => { setIsConnected(false); setNodes([]); setEdges([]); setDbSchema([]); setPreviewData(null); setQueryResults(null); }} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-secondaryForeground)', border: '1px solid var(--vscode-button-secondaryBackground)', cursor: 'pointer', borderRadius: '2px', marginRight: '16px' }}>Disconnect</button>
+                   <button onClick={loadWorkspace} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-editor-foreground)', border: '1px solid var(--vscode-editor-foreground)', cursor: 'pointer', borderRadius: '2px', marginRight: '6px' }} title="Load .sqlviz workspace">📂 Load</button>
+                   <button onClick={saveWorkspace} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-editor-foreground)', border: '1px solid var(--vscode-editor-foreground)', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', marginRight: '24px', opacity: nodes.length === 0 ? 0.5 : 1 }} title="Save to .sqlviz workspace">💾 Save</button>
                    <button onClick={runVisualQuery} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'var(--vscode-button-background)', color: 'var(--vscode-button-foreground)', border: 'none', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', marginRight: '12px', opacity: nodes.length === 0 ? 0.5 : 1 }}>Run Visual Query</button>
                    <button onClick={generateSQL} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-foreground)', border: '1px solid var(--vscode-button-background)', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', opacity: nodes.length === 0 ? 0.5 : 1 }}>Export SQL Batch</button>
                 </div>
             </div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
-                {isConnected && <Sidebar dbSchema={dbSchema} />}
+                {isConnected && <Sidebar dbSchema={dbSchema} onRefresh={refreshSchema} />}
                 <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }} ref={reactFlowWrapper}>
                     <div style={{ flex: 1, position: 'relative' }}>
                         <ReactFlowProvider>

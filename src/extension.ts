@@ -282,6 +282,35 @@ export function activate(context: vscode.ExtensionContext) {
                             vscode.window.showErrorMessage(`Execution Error: ${err.message}`);
                         }
                         return;
+                    case 'SAVE_WORKSPACE':
+                        const saveUri = await vscode.window.showSaveDialog({
+                            filters: { 'SQL Visualize Config': ['sqlviz'] },
+                            title: 'Save Workspace As',
+                            defaultUri: vscode.Uri.file(vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath + '/query.sqlviz' : 'query.sqlviz')
+                        });
+                        if (saveUri) {
+                            const payload = JSON.stringify(message.payload, null, 2);
+                            const writeData = new TextEncoder().encode(payload);
+                            await vscode.workspace.fs.writeFile(saveUri, writeData);
+                            vscode.window.showInformationMessage('SQL Visualize: Workspace saved successfully!');
+                        }
+                        return;
+                    case 'LOAD_WORKSPACE':
+                        const openUris = await vscode.window.showOpenDialog({
+                            canSelectMany: false,
+                            filters: { 'SQL Visualize Config': ['sqlviz'] },
+                            title: 'Load SQL Visualize Workspace'
+                        });
+                        if (openUris && openUris[0]) {
+                            try {
+                                const fileData = await vscode.workspace.fs.readFile(openUris[0]);
+                                const payload = JSON.parse(Buffer.from(fileData).toString('utf8'));
+                                panel.webview.postMessage({ command: 'WORKSPACE_LOADED', payload });
+                            } catch (err: any) {
+                                vscode.window.showErrorMessage(`SQL Visualize: Failed to load workspace: ${err.message}`);
+                            }
+                        }
+                        return;
                     case 'GENERATE_SQL':
                         const sqlOutput = generateSqlFromGraph(message.payload.nodes, message.payload.edges);
                         vscode.workspace.openTextDocument({ language: 'sql', content: sqlOutput }).then(doc => {
