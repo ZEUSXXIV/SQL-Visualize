@@ -38,6 +38,7 @@ function generateSqlFromGraph(nodes: any[], edges: any[]): string {
     // 3. Generate SQL for each isolated graph component
     components.forEach((compNodes, idx) => {
         let selectColumns: string[] = [];
+        let whereClauses: string[] = [];
 
         // Track column name occurrences to handle duplicates
         const colMetadata: any[] = [];
@@ -50,6 +51,24 @@ function generateSqlFromGraph(nodes: any[], edges: any[]): string {
                     const targetName = col.alias || col.name;
                     counters[targetName] = (counters[targetName] || 0) + 1;
                     colMetadata.push({ node, col, targetName, tableReference });
+                }
+
+                // Process filters
+                if (col.filter && col.filter.operator) {
+                    const op = col.filter.operator;
+                    if (op === 'IS NULL' || op === 'IS NOT NULL') {
+                        whereClauses.push(`${tableReference}.${col.name} ${op}`);
+                    } else if (col.filter.value && col.filter.value.trim() !== '') {
+                        let val = col.filter.value.trim();
+                        // Smart Quotes auto-wrapping
+                        if (op !== 'IN') {
+                             const needsQuotes = /char|text|date|time|uniqueidentifier/i.test(col.type);
+                             if (needsQuotes && !val.startsWith("'")) {
+                                 val = `'${val}'`;
+                             }
+                        }
+                        whereClauses.push(`${tableReference}.${col.name} ${op} ${val}`);
+                    }
                 }
             });
         });
@@ -124,6 +143,10 @@ function generateSqlFromGraph(nodes: any[], edges: any[]): string {
         }
 
         let rawSql = `SELECT ${selectColumns.length > 0 ? selectColumns.join(', ') : '*'} FROM ${fromTable} ${joins.join(' ')}`;
+        
+        if (whereClauses.length > 0) {
+            rawSql += `\nWHERE ${whereClauses.join(' AND ')}`;
+        }
         
         const hasAgg = selectColumns.some(c => c.match(/(COUNT|SUM|MAX|MIN|AVG)\(/i));
         if (hasAgg) {
