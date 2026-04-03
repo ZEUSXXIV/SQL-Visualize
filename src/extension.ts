@@ -38,16 +38,35 @@ function generateSqlFromGraph(nodes: any[], edges: any[]): string {
     // 3. Generate SQL for each isolated graph component
     components.forEach((compNodes, idx) => {
         let selectColumns: string[] = [];
+
+        // Track column name occurrences to handle duplicates
+        const colMetadata: any[] = [];
+        const counters: Record<string, number> = {};
+
         compNodes.forEach((node: any) => {
             const tableReference = node.data.tableAlias || node.data.tableName;
             node.data.columns.forEach((col: any) => {
                 if (col.isSelected !== false) {
-                    let colStr = `${tableReference}.${col.name}`;
-                    if (col.function && col.function !== '') colStr = `${col.function}(${colStr})`;
-                    if (col.alias && col.alias !== '') colStr += ` AS ${col.alias}`;
-                    selectColumns.push(colStr);
+                    const targetName = col.alias || col.name;
+                    counters[targetName] = (counters[targetName] || 0) + 1;
+                    colMetadata.push({ node, col, targetName, tableReference });
                 }
             });
+        });
+
+        // Generate actual SELECT strings
+        colMetadata.forEach(meta => {
+            let colStr = `${meta.tableReference}.${meta.col.name}`;
+            if (meta.col.function && meta.col.function !== '') colStr = `${meta.col.function}(${colStr})`;
+            
+            if (counters[meta.targetName] > 1) {
+                const cleanTableName = meta.tableReference.replace(/\[|\]/g, '');
+                const finalAlias = meta.col.alias || meta.col.name;
+                colStr += ` AS [${cleanTableName}.${finalAlias}]`;
+            } else if (meta.col.alias && meta.col.alias !== '') {
+                colStr += ` AS [${meta.col.alias}]`;
+            }
+            selectColumns.push(colStr);
         });
 
         const root = compNodes[0];
