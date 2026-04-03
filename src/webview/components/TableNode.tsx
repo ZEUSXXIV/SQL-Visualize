@@ -23,6 +23,17 @@ export const TableNode = ({ data, id }: any) => {
         );
     };
 
+    const updateTableAlias = (alias: string) => {
+        setNodes((nds) => 
+            nds.map((node) => {
+                if (node.id === id) {
+                    node.data = { ...node.data, tableAlias: alias };
+                }
+                return node;
+            })
+        );
+    };
+
     const deleteTable = () => {
         setNodes((nds) => nds.filter((n) => n.id !== id));
         setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
@@ -31,7 +42,17 @@ export const TableNode = ({ data, id }: any) => {
     return (
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', border: '1px solid var(--vscode-panel-border)', borderRadius: '4px', minWidth: '320px', fontSize: '12px' }}>
             <div style={{ background: 'var(--vscode-editorGroupHeader-tabsBackground)', padding: '8px', borderBottom: '1px solid var(--vscode-panel-border)', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>{data.tableName}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{data.tableName}</span>
+                    <input 
+                        title="Table Alias"
+                        type="text" 
+                        placeholder="Alias (e.g. t1)" 
+                        value={data.tableAlias || ""}
+                        onChange={(e) => updateTableAlias(e.target.value)}
+                        style={{ width: '80px', fontSize: '10px', background: 'var(--vscode-input-background)', color: 'var(--vscode-input-foreground)', border: '1px solid var(--vscode-input-border)', outline: 'none', padding: '2px', fontWeight: 'normal' }}
+                    />
+                </div>
                 <button 
                   onClick={deleteTable} 
                   style={{ background: 'transparent', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer', outline: 'none' }} 

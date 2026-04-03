@@ -126,10 +126,10 @@ export function activate(context: vscode.ExtensionContext) {
                         components.forEach((compNodes, idx) => {
                             let selectColumns: string[] = [];
                             compNodes.forEach((node: any) => {
-                                const table = node.data.tableName;
+                                const tableReference = node.data.tableAlias || node.data.tableName;
                                 node.data.columns.forEach((col: any) => {
                                     if (col.isSelected !== false) {
-                                        let colStr = `${table}.${col.name}`;
+                                        let colStr = `${tableReference}.${col.name}`;
                                         if (col.function && col.function !== '') colStr = `${col.function}(${colStr})`;
                                         if (col.alias && col.alias !== '') colStr += ` AS ${col.alias}`;
                                         selectColumns.push(colStr);
@@ -138,7 +138,7 @@ export function activate(context: vscode.ExtensionContext) {
                             });
 
                             const root = compNodes[0];
-                            let fromTable = root.data.tableName;
+                            let fromTable = root.data.tableAlias ? `${root.data.tableName} AS ${root.data.tableAlias}` : root.data.tableName;
                             let joins: string[] = [];
                             
                             if (compNodes.length > 1) {
@@ -160,10 +160,13 @@ export function activate(context: vscode.ExtensionContext) {
                                         remainingEdges.forEach(e => {
                                             const s = nodes.find((n: any) => n.id === e.source);
                                             const t = nodes.find((n: any) => n.id === e.target);
+                                            const sTable = s.data.tableAlias || s.data.tableName;
+                                            const tTableDef = t.data.tableAlias ? `${t.data.tableName} AS ${t.data.tableAlias}` : t.data.tableName;
+                                            const tTable = t.data.tableAlias || t.data.tableName;
                                             const sCol = e.sourceHandle.replace('out-', '');
                                             const tCol = e.targetHandle.replace('in-', '');
                                             const jType = e.data?.joinType || 'INNER';
-                                            joins.push(`${jType} JOIN ${t.data.tableName} ON ${s.data.tableName}.${sCol} = ${t.data.tableName}.${tCol}`);
+                                            joins.push(`${jType} JOIN ${tTableDef} ON ${sTable}.${sCol} = ${tTable}.${tCol}`);
                                         });
                                         break;
                                     }
@@ -176,15 +179,16 @@ export function activate(context: vscode.ExtensionContext) {
                                     
                                     const sNode = nodes.find((n: any) => n.id === e.source);
                                     const tNode = nodes.find((n: any) => n.id === e.target);
-                                    const sTable = sNode.data.tableName;
-                                    const tTable = tNode.data.tableName;
+                                    const sTable = sNode.data.tableAlias || sNode.data.tableName;
+                                    const tTable = tNode.data.tableAlias || tNode.data.tableName;
                                     const sCol = e.sourceHandle.replace('out-', '');
                                     const tCol = e.targetHandle.replace('in-', '');
                                     
-                                    const enteringTable = targetId === e.source ? sTable : tTable;
+                                    const enteringNode = targetId === e.source ? sNode : tNode;
+                                    const enteringTableDef = enteringNode.data.tableAlias ? `${enteringNode.data.tableName} AS ${enteringNode.data.tableAlias}` : enteringNode.data.tableName;
                                     const joinType = e.data?.joinType || 'INNER';
                                     
-                                    joins.push(`${joinType} JOIN ${enteringTable} ON ${sTable}.${sCol} = ${tTable}.${tCol}`);
+                                    joins.push(`${joinType} JOIN ${enteringTableDef} ON ${sTable}.${sCol} = ${tTable}.${tCol}`);
                                 }
                             }
 
@@ -195,7 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
                                 const ast = parser.astify(rawSql);
                                 parsedSql = parser.sqlify(ast, { database: 'transactsql' });
                             } catch(e) {
-                                parsedSql = rawSql + '\\n-- (AST Generation fallback)';
+                                parsedSql = rawSql + '\n-- (AST Generation fallback)';
                             }
 
                             const hasAgg = selectColumns.some(c => c.match(/(COUNT|SUM|MAX|MIN|AVG)\(/));
