@@ -33,6 +33,7 @@ export const App = () => {
     const [queryResults, setQueryResults] = useState<{ data: any[], rowsAffected: number } | null>(null);
     const [queryError, setQueryError] = useState<string | null>(null);
     const [validationTrigger, setValidationTrigger] = useState(0);
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
     useEffect(() => {
         const messageHandler = (event: MessageEvent) => {
@@ -166,6 +167,62 @@ export const App = () => {
         if (window.vscodeApi) window.vscodeApi.postMessage({ command: 'SAVE_WORKSPACE', payload: { nodes, edges } });
     };
 
+    const runSelectedBatch = useCallback(() => {
+        if (!selectedNodeId) {
+            runVisualQuery();
+            return;
+        }
+        setQueryError(null);
+        setQueryResults(null);
+        // @ts-ignore
+        if (window.vscodeApi) window.vscodeApi.postMessage({ 
+            command: 'EXECUTE_VISUAL_BATCH', 
+            payload: { nodes, edges, targetNodeId: selectedNodeId } 
+        });
+    }, [nodes, edges, selectedNodeId]);
+
+    const generateBatchSQL = useCallback(() => {
+        if (!selectedNodeId) {
+            generateSQL();
+            return;
+        }
+        // @ts-ignore
+        if (window.vscodeApi) window.vscodeApi.postMessage({ 
+            command: 'GENERATE_BATCH_SQL', 
+            payload: { nodes, edges, targetNodeId: selectedNodeId } 
+        });
+    }, [nodes, edges, selectedNodeId]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // F5 or Ctrl+Enter -> Run Batch
+            if (e.key === 'F5' || (e.ctrlKey && e.key === 'Enter')) {
+                e.preventDefault();
+                runSelectedBatch();
+            }
+            // Ctrl+Shift+S -> Save
+            if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+                e.preventDefault();
+                saveWorkspace();
+            }
+            // Ctrl+O -> Load
+            if (e.ctrlKey && e.key === 'o') {
+                e.preventDefault();
+                loadWorkspace();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [runSelectedBatch]);
+
+    const onSelectionChange = useCallback(({ nodes: selectedNodes }: any) => {
+        if (selectedNodes.length > 0) {
+            setSelectedNodeId(selectedNodes[0].id);
+        } else {
+            setSelectedNodeId(null);
+        }
+    }, []);
+
     const onConnect = useCallback((connection: Connection) => {
         const sourceNode = nodes.find((n: any) => n.id === connection.source);
         const targetNode = nodes.find((n: any) => n.id === connection.target);
@@ -231,10 +288,28 @@ export const App = () => {
                 <div>
                    {!isConnected && <span style={{ color: 'var(--vscode-descriptionForeground)', fontSize: '11px', fontStyle: 'italic', marginRight: '16px' }}>Workspace loaded. Connect to validate schema & run queries.</span>}
                    <button onClick={() => { setIsConnected(false); setNodes([]); setEdges([]); setDbSchema([]); setPreviewData(null); setQueryResults(null); }} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-secondaryForeground)', border: '1px solid var(--vscode-button-secondaryBackground)', cursor: 'pointer', borderRadius: '2px', marginRight: '16px' }}>Disconnect</button>
-                   <button onClick={loadWorkspace} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-editor-foreground)', border: '1px solid var(--vscode-editor-foreground)', cursor: 'pointer', borderRadius: '2px', marginRight: '6px' }} title="Load .sqlviz workspace">📂 Load</button>
-                   <button onClick={saveWorkspace} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-editor-foreground)', border: '1px solid var(--vscode-editor-foreground)', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', marginRight: '24px', opacity: nodes.length === 0 ? 0.5 : 1 }} title="Save to .sqlviz workspace">💾 Save</button>
-                   <button onClick={runVisualQuery} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'var(--vscode-button-background)', color: 'var(--vscode-button-foreground)', border: 'none', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', marginRight: '12px', opacity: nodes.length === 0 ? 0.5 : 1 }}>Run Visual Query</button>
-                   <button onClick={generateSQL} disabled={nodes.length === 0} style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-foreground)', border: '1px solid var(--vscode-button-background)', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', opacity: nodes.length === 0 ? 0.5 : 1 }}>Export SQL Batch</button>
+                   
+                   <button onClick={loadWorkspace} style={{ padding: '6px 12px', background: 'transparent', color: 'var(--vscode-editor-foreground)', border: '1px solid var(--vscode-panel-border)', cursor: 'pointer', borderRadius: '2px', marginRight: '4px' }} title="Load .sqlviz workspace (Ctrl+O)">📂 Load</button>
+                   <button onClick={saveWorkspace} disabled={nodes.length === 0} style={{ padding: '6px 12px', background: 'transparent', color: 'var(--vscode-editor-foreground)', border: '1px solid var(--vscode-panel-border)', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', marginRight: '12px', opacity: nodes.length === 0 ? 0.5 : 1 }} title="Save to .sqlviz workspace (Ctrl+Shift+S)">💾 Save</button>
+
+                   <span style={{ borderLeft: '1px solid var(--vscode-panel-border)', marginRight: '12px', height: '16px' }}></span>
+
+                   <button 
+                        onClick={runSelectedBatch} 
+                        disabled={nodes.length === 0} 
+                        style={{ padding: '6px 16px', background: selectedNodeId ? 'var(--vscode-button-background)' : 'transparent', color: selectedNodeId ? 'var(--vscode-button-foreground)' : 'var(--vscode-button-background)', border: selectedNodeId ? 'none' : '1px solid var(--vscode-button-background)', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', marginRight: '8px', opacity: nodes.length === 0 ? 0.5 : 1 }}
+                        title={selectedNodeId ? "Run Selected Batch (F5)" : "Run Entire Canvas (F5)"}
+                    >
+                        {selectedNodeId ? '▶ Run Selection' : '▶ Run All'}
+                   </button>
+                   <button 
+                        onClick={generateBatchSQL} 
+                        disabled={nodes.length === 0} 
+                        style={{ padding: '6px 16px', background: 'transparent', color: 'var(--vscode-button-foreground)', border: '1px solid var(--vscode-panel-border)', cursor: nodes.length === 0 ? 'not-allowed' : 'pointer', borderRadius: '2px', fontWeight: 'bold', opacity: nodes.length === 0 ? 0.5 : 1 }}
+                        title={selectedNodeId ? "Export Selection SQL" : "Export Entire Canvas SQL"}
+                    >
+                        {selectedNodeId ? '📄 Export Selection' : '📄 Export All'}
+                   </button>
                 </div>
             </div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
@@ -251,6 +326,7 @@ export const App = () => {
                                 onInit={setReactFlowInstance}
                                 onDrop={onDrop}
                                 onDragOver={onDragOver}
+                                onSelectionChange={onSelectionChange}
                                 nodeTypes={nodeTypes}
                                 edgeTypes={edgeTypes}
                             >

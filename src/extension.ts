@@ -2,8 +2,10 @@ import * as vscode from 'vscode';
 import { Parser } from 'node-sql-parser';
 import * as sql from 'mssql';
 
-function generateSqlFromGraph(nodes: any[], edges: any[]): string {
+function generateSqlFromGraph(nodes: any[], edges: any[], targetNodeId?: string): string {
     let finalOutput = '';
+
+    if (nodes.length === 0) return '';
 
     // 1. Build Adjacency List for Connected Components
     const adj: Record<string, string[]> = {};
@@ -35,8 +37,12 @@ function generateSqlFromGraph(nodes: any[], edges: any[]): string {
         }
     });
 
-    // 3. Generate SQL for each isolated graph component
-    components.forEach((compNodes, idx) => {
+    // 3. Generate SQL for specific component (if targetNodeId provided) or all
+    const targetComponents = targetNodeId 
+        ? components.filter(comp => comp.some(n => n.id === targetNodeId))
+        : components;
+
+    targetComponents.forEach((compNodes, idx) => {
         let selectColumns: string[] = [];
         let whereClauses: string[] = [];
 
@@ -314,6 +320,34 @@ export function activate(context: vscode.ExtensionContext) {
                     case 'GENERATE_SQL':
                         const sqlOutput = generateSqlFromGraph(message.payload.nodes, message.payload.edges);
                         vscode.workspace.openTextDocument({ language: 'sql', content: sqlOutput }).then(doc => {
+                            vscode.window.showTextDocument(doc);
+                        });
+                        return;
+                    case 'EXECUTE_VISUAL_BATCH':
+                        if (!dbPool) {
+                            vscode.window.showErrorMessage('SQL Visualize: Database not connected.');
+                            return;
+                        }
+                        try {
+                            const sql = generateSqlFromGraph(message.payload.nodes, message.payload.edges, message.payload.targetNodeId);
+                            vscode.window.showInformationMessage(`SQL Visualize: Executing batch for [${message.payload.targetNodeId}]...`);
+                            const result = await dbPool.request().query(sql);
+                            panel.webview.postMessage({ 
+                                command: 'QUERY_RESULTS', 
+                                data: result.recordset,
+                                rowsAffected: result.rowsAffected[0]
+                            });
+                        } catch(err: any) {
+                            panel.webview.postMessage({ 
+                                command: 'QUERY_ERROR', 
+                                message: err.message 
+                            });
+                            vscode.window.showErrorMessage(`Batch Execution Error: ${err.message}`);
+                        }
+                        return;
+                    case 'GENERATE_BATCH_SQL':
+                        const batchSql = generateSqlFromGraph(message.payload.nodes, message.payload.edges, message.payload.targetNodeId);
+                        vscode.workspace.openTextDocument({ language: 'sql', content: batchSql }).then(doc => {
                             vscode.window.showTextDocument(doc);
                         });
                         return;
