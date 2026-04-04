@@ -22,5 +22,14 @@ We built a robust bi-directional IPC sequence allowing the graph nodes to ask th
 - Use the **Search bar** to locate a table and drag it.
 - Click the **👁️ icon** and the bottom tray will gracefully slide up populating your 25 live rows! It also supports clicking the `✖` explicitly to dismiss.
 
-## Next Steps
-We mentioned "Live Query Execution" as the other major refinement in Phase 7. As it stands, your "Export SQL Batch" button opens the generated SQL into a text editor (which works great!). Do you want to build a secondary tray that *executes* the fully generated query directly? Or are you ready to wrap up and deploy this version?
+## Phase 8: Robustness & Testing 🛡️
+We have successfully implemented a comprehensive unit testing suite and refactored the core SQL generation engine for maximum reliability.
+
+### What We Accomplished
+- **Decoupled SQL Engine**: Moved all generation logic into a standalone `SqlGenerator` class in `src/core`.
+- **Unit Test Suite**: Added a robust testing framework using **Mocha** and **Chai**.
+- **Coverage**: 8+ test cases covering complex JOINs, smart quoting for data types, aggregation logic, and batch execution isolation.
+
+## Verification
+- Run `npm run test:unit` to execute the core engine tests.
+- All tests should pass within milliseconds, ensuring no regressions in SQL generation.

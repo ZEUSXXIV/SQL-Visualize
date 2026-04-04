@@ -29,4 +29,6 @@ The UI renders the visual canvas, while the Extension Host interacts with VS Cod
 - `OPEN_EDITOR`: Ask Host to open a new VS Code text document with the generated SQL.
 
 ## 4. SQL Generation Pipeline
-`[React Graph State]` -> `[JSON Representation]` -> `[Host AST Parser (node-sql-parser)]` -> `[T-SQL Output]`
+`[React Flow Graph]` -> `[JSON Representation]` -> `[SqlGenerator (src/core)]` -> `[T-SQL Output]`
+
+The **SqlGenerator** is a decoupled core component responsible for transforming the visual graph into valid T-SQL. By separating this logic from the Extension Host, it can be unit-tested independently of the VS Code environment using the Mocha/Chai suite in `src/test/unit`.
