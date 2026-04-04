@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useState, useRef } from 'react';
 import ReactFlow, { addEdge, Background, Controls, Node, Edge, Connection, useNodesState, useEdgesState, ReactFlowProvider } from 'reactflow';
 import { TableNode } from './components/TableNode';
 import { JoinEdge } from './components/JoinEdge';
+import { SuggestedJoinEdge } from './components/SuggestedJoinEdge';
 import { Sidebar } from './components/Sidebar';
 import { ConnectionModal } from './components/ConnectionModal';
 import 'reactflow/dist/style.css';
 
 const nodeTypes = { tableNode: TableNode };
-const edgeTypes = { joinEdge: JoinEdge };
+const edgeTypes = { joinEdge: JoinEdge, suggestedJoinEdge: SuggestedJoinEdge };
 
 declare global {
     interface Window {
@@ -267,15 +268,64 @@ export const App = () => {
             y: event.clientY - reactFlowBounds.top,
         });
 
+        const newNodeId = getId();
         const newNode = {
-            id: getId(),
+            id: newNodeId,
             type: 'tableNode',
             position,
-            data: { tableName: tableDef.tableName, columns: tableDef.columns },
+            data: { 
+                tableName: tableDef.tableName, 
+                columns: tableDef.columns,
+                foreignKeys: tableDef.foreignKeys || []
+            },
         };
 
         setNodes((nds) => nds.concat(newNode));
-    }, [reactFlowInstance, setNodes]);
+
+        // Generate Join Suggestions
+        const suggestions: Edge[] = [];
+        
+        // 1. Scan for FKs from NEW table to EXISTING nodes
+        if (tableDef.foreignKeys) {
+            tableDef.foreignKeys.forEach((fk: any) => {
+                const targetNode = nodes.find((n: any) => n.data.tableName === fk.referencedTable);
+                if (targetNode) {
+                    suggestions.push({
+                        id: `suggest-${newNodeId}-${targetNode.id}`,
+                        source: newNodeId,
+                        target: targetNode.id,
+                        sourceHandle: `out-${fk.column}`,
+                        targetHandle: `in-${fk.referencedColumn}`,
+                        type: 'suggestedJoinEdge',
+                        data: { fkName: fk.name }
+                    });
+                }
+            });
+        }
+
+        // 2. Scan for FKs from EXISTING nodes to NEW table
+        nodes.forEach((node: any) => {
+            if (node.data.foreignKeys) {
+                node.data.foreignKeys.forEach((fk: any) => {
+                    if (fk.referencedTable === tableDef.tableName) {
+                        suggestions.push({
+                            id: `suggest-${node.id}-${newNodeId}`,
+                            source: node.id,
+                            target: newNodeId,
+                            sourceHandle: `out-${fk.column}`,
+                            targetHandle: `in-${fk.referencedColumn}`,
+                            type: 'suggestedJoinEdge',
+                            data: { fkName: fk.name }
+                        });
+                    }
+                });
+            }
+        });
+
+        if (suggestions.length > 0) {
+            setEdges((eds) => eds.concat(suggestions));
+        }
+    }, [reactFlowInstance, setNodes, nodes, setEdges]);
 
     return (
         <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>

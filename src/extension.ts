@@ -57,7 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
                             return;
                         }
                         try {
-                            const result = await dbPool.request().query(`
+                            const tableResult = await dbPool.request().query(`
                                 SELECT 
                                     t.name AS tableName,
                                     c.name AS columnName,
@@ -76,14 +76,41 @@ export function activate(context: vscode.ExtensionContext) {
                                     tableName, 
                                     c.column_id;
                             `);
+
+                            const fkResult = await dbPool.request().query(`
+                                SELECT 
+                                    f.name AS fkName,
+                                    OBJECT_SCHEMA_NAME(f.parent_object_id) AS ptSchema,
+                                    OBJECT_NAME(f.parent_object_id) AS ptTable,
+                                    COL_NAME(fc.parent_object_id, fc.parent_column_id) AS ptColumn,
+                                    OBJECT_SCHEMA_NAME(f.referenced_object_id) AS rtSchema,
+                                    OBJECT_NAME(f.referenced_object_id) AS rtTable,
+                                    COL_NAME(fc.referenced_object_id, fc.referenced_column_id) AS rtColumn
+                                FROM 
+                                    sys.foreign_keys AS f
+                                INNER JOIN 
+                                    sys.foreign_key_columns AS fc ON f.object_id = fc.constraint_object_id;
+                            `);
                             
                             const tablesMap: Record<string, any> = {};
-                            result.recordset.forEach((row: any) => {
+                            tableResult.recordset.forEach((row: any) => {
                                 const key = `[${row.schemaName}].[${row.tableName}]`;
                                 if (!tablesMap[key]) {
-                                    tablesMap[key] = { tableName: key, columns: [] };
+                                    tablesMap[key] = { tableName: key, columns: [], foreignKeys: [] };
                                 }
                                 tablesMap[key].columns.push({ name: `${row.columnName}`, type: row.dataType });
+                            });
+
+                            fkResult.recordset.forEach((row: any) => {
+                                const parentKey = `[${row.ptSchema}].[${row.ptTable}]`;
+                                if (tablesMap[parentKey]) {
+                                    tablesMap[parentKey].foreignKeys.push({
+                                        name: row.fkName,
+                                        column: row.ptColumn,
+                                        referencedTable: `[${row.rtSchema}].[${row.rtTable}]`,
+                                        referencedColumn: row.rtColumn
+                                    });
+                                }
                             });
                             
                             const tablesArray = Object.values(tablesMap);
