@@ -74,7 +74,7 @@ export class SqlGenerator {
                             let val = col.filter.value.trim();
                             // Smart Quotes auto-wrapping
                             if (op !== 'IN') {
-                                 const needsQuotes = /char|text|date|time|uniqueidentifier|varchar|nvarchar/i.test(col.type);
+                                 const needsQuotes = /char|text|date|time|uniqueidentifier|string/i.test(col.type);
                                  if (needsQuotes && !val.startsWith("'")) {
                                      val = `'${val}'`;
                                  }
