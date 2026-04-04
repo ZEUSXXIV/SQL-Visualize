@@ -1,33 +1,41 @@
 # 🛰️ SQL Visualize
-### *Visual T-SQL Query Designer for VS Code*
+### *The Intelligent Visual T-SQL Designer for VS Code*
 
-**SQL Visualize** transforms the way you write T-SQL queries. Instead of wrestling with complex JOIN syntax and aggregate grouping, simply drag, drop, and connect.
+![SQL Visualize Banner](./assets/banner.png)
+
+**SQL Visualize** eliminates the complexity of manual T-SQL query construction. By combining a high-performance interactive canvas with an intelligent relational engine, it allows developers to build production-ready queries with zero syntax errors.
 
 ---
 
-## 🚀 Experience the Flow
+## ✨ Key Features
 
-SQL Visualize provides a high-performance, interactive canvas for database schema exploration and query generation.
+### 🌲 Premium Object Explorer
+Skip the flat lists. Our explorer groups objects by **Schema**, supports **Auto-Expand** during search, and allows you to **Peek at Columns** and types directly in the sidebar. Used a "Ghost Eye" icon for instant `TOP 25` data previews.
 
-- **🎨 Intuitive Canvas**: Powered by React Flow for a smooth, pan-and-zoom infinite workspace.
-- **🔗 Smart Joins**: Draw connections between columns. SQL Visualize automatically identifies compatible data types and handles the JOIN logic.
-- **📊 Real-time Aggregation**: Apply `MAX`, `MIN`, `COUNT`, `SUM`, and `AVG` directly on column nodes. 
-- **🛡️ Type Safety**: Active guarding prevents incompatible column joins (e.g., joining `INT` to `DATETIME`).
-- **📦 Multi-Query Batching**: Isolated table clusters on your canvas are automatically generated as separate, valid T-SQL batches.
-- **✨ Auto-Grouping**: SQL Visualize automatically calculates and injects `GROUP BY` clauses when aggregate functions are detected.
+### 🧠 Intelligent Join Suggester
+Building relationships is now effortless. As you drag tables like `Orders` onto the canvas, SQL Visualize scans for Foreign Keys and overlays **"Ghost Joins"** (dashed lines). Accept them with one click to instantly integrate them into your query.
+
+### 🎨 Visual Join Editor
+Configure complex relationships using our **Venn Diagram** pop-over. Visualize `INNER`, `LEFT`, `RIGHT`, and `FULL` joins with real-time hover feedback, ensuring you always get the right set of data.
+
+### 📊 Batch Execution Engine
+Got a complex canvas with multiple disconnected queries? Our **Island Sensing** technology automatically identifies separate table clusters and generates them as distinct, valid T-SQL batches.
+
+### 🛠️ Robust SQL Compiler
+Our engine handles the "heavy lifting"—automatically injecting `GROUP BY` clauses, resolving column name collisions across tables, and managing circular join paths (A-B-C-A).
 
 ---
 
 ## 🛠️ Tech Stack
 
 - **Core**: VS Code Extension API (TypeScript)
-- **Frontend**: React + React Flow
-- **Styling**: VS Code Webview UI Toolkit (Native Look & Feel)
-- **Engine**: Node SQL Parser (AST-based generation)
+- **Frontend**: React + React Flow + SVG Components
+- **Styling**: VS Code Webview UI Toolkit (Seamless Integration)
+- **Testing**: 56-Case Automated Regression Suite (Mocha/Chai)
 
 ---
 
-## 🛠️ Getting Started
+## 🚀 Getting Started
 
 ### Installation
 1. Search for **SQL Visualize** in the VS Code Extension Marketplace.
@@ -35,28 +43,37 @@ SQL Visualize provides a high-performance, interactive canvas for database schem
 ### Usage
 1. Open the Command Palette (**Ctrl+Shift+P**).
 2. Type `SQL Visualize: Open Canvas`.
-3. **Important**: Follow the [SQL Server Setup Guide](file:///c:/Users/Naveen/Documents/projects/mssql-visual-builder/docs/sql-server-setup.md) to enable TCP/IP and SQL Authentication on your local server.
-4. Provide your connection string (e.g., `Server=localhost;Database=master;User Id=sa;Password=...;Encrypt=True;TrustServerCertificate=True;`).
-5. Click **Connect Engine** to load your schema into the Object Explorer Sidebar.
-6. Drag tables onto the canvas and start building!
+3. Follow the [SQL Server Setup Guide](./docs/sql-server-setup.md) to enable TCP/IP and SQL Authentication.
+4. Provide your connection string and click **Connect Engine**.
+5. Drag tables from the hierarchical explorer to the canvas and start designing!
+
+> [!TIP]
+> Use the **Target Node** feature (Right-click a node) to isolate and run only the sub-query connected to that specific table.
 
 ---
 
 ## 🔧 Developer Setup
 
-If you want to contribute to the engine:
+If you want to contribute to the engine or build your own node types:
 
 ```bash
 # Clone and install
 git clone https://github.com/your-username/sql-visualize.git
 npm install
 
-# Build extension and webview
+# Build all components
 npm run compile
 
-# Launch
-# Press F5 in VS Code to start the Extension Development Host
+# Test the core logic
+npm run test:unit
 ```
+
+---
+
+## 📄 References
+- [Full Feature Documentation](./docs/features.md)
+- [Architecture & Workflow](./docs/architecture.md)
+- [SQLViz Workspace Format](./docs/sqlviz-format.md)
 
 ---
 
