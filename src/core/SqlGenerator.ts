@@ -13,10 +13,11 @@ export class SqlGenerator {
 
         if (nodes.length === 0) return '';
 
-        // 1. Build Adjacency List for Connected Components
+        // 1. Build Adjacency List for Connected Components (Ignore suggestions)
+        const activeEdges = edges.filter(e => e.type !== 'suggestedJoinEdge');
         const adj: Record<string, string[]> = {};
         nodes.forEach((n: any) => adj[n.id] = []);
-        edges.forEach((e: any) => {
+        activeEdges.forEach((e: any) => {
             if(adj[e.source]) adj[e.source].push(e.target);
             if(adj[e.target]) adj[e.target].push(e.source);
         });

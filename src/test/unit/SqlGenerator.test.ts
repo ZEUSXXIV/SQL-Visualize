@@ -433,4 +433,64 @@ describe('SqlGenerator - Comprehensive Suite (50+ Cases)', () => {
             expect(sql.endsWith('\n')).to.be.false; // Trimmed
         });
     });
+
+    describe('6. New Feature Tests (Visual Join & Suggestions) (4 Cases)', () => {
+        it('6.1 Ghost Join Isolation (SQL Generator ignores suggestedJoinEdge)', () => {
+            const nodes = [
+                new TableBuilder('1', 'Orders').withColumn('Id', 'int').build(),
+                new TableBuilder('2', 'Customers').withColumn('Id', 'int').build()
+            ];
+            const edges = [{
+                id: 'suggest-1-2',
+                source: '1',
+                target: '2',
+                sourceHandle: 'out-CustomerId',
+                targetHandle: 'in-Id',
+                type: 'suggestedJoinEdge' // This should be ignored
+            }];
+            const sql = SqlGenerator.generateSqlFromGraph(nodes, edges);
+            // Should be treated as two disconnected tables because the join is only a "suggestion"
+            expect(sql).to.contain('Query Batch 1');
+            expect(sql).to.contain('Query Batch 2');
+            expect(sql).to.not.contain('JOIN');
+        });
+
+        it('6.2 Conversion from Suggestion to Join (Manual Accept Simulation)', () => {
+             const nodes = [
+                new TableBuilder('1', 'Orders').withColumn('Id', 'int').build(),
+                new TableBuilder('2', 'Customers').withColumn('Id', 'int').build()
+            ];
+            const edges = [buildEdge('1', 'CustomerId', '2', 'Id', 'INNER')]; // Accepted state
+            const sql = SqlGenerator.generateSqlFromGraph(nodes, edges);
+            expect(sql).to.contain('INNER JOIN Customers ON Orders.CustomerId = Customers.Id');
+            expect(sql).to.not.contain('Query Batch 2'); // Should be one batch now
+        });
+
+        it('6.3 Support for ALL Visual Join Types', () => {
+            const types = ['INNER', 'LEFT', 'RIGHT', 'FULL'];
+            types.forEach(type => {
+                const nodes = [new TableBuilder('1', 'A').build(), new TableBuilder('2', 'B').build()];
+                const edges = [buildEdge('1', 'id', '2', 'id', type)];
+                const sql = SqlGenerator.generateSqlFromGraph(nodes, edges);
+                expect(sql).to.contain(`${type} JOIN B`);
+            });
+        });
+
+        it('6.4 Multiple suggested joins ignored simultaneously', () => {
+            const nodes = [
+                new TableBuilder('1', 'A').build(),
+                new TableBuilder('2', 'B').build(),
+                new TableBuilder('3', 'C').build()
+            ];
+            const edges = [
+                { id: 's1', source: '1', target: '2', sourceHandle: 'out-f1', targetHandle: 'in-f1', type: 'suggestedJoinEdge' },
+                { id: 's2', source: '2', target: '3', sourceHandle: 'out-f2', targetHandle: 'in-f2', type: 'suggestedJoinEdge' }
+            ];
+            const sql = SqlGenerator.generateSqlFromGraph(nodes, edges);
+            expect(sql).to.contain('Query Batch 1');
+            expect(sql).to.contain('Query Batch 2');
+            expect(sql).to.contain('Query Batch 3');
+            expect(sql).to.not.contain('JOIN');
+        });
+    });
 });
